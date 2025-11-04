@@ -60,13 +60,13 @@ final class Context
      * Accès aux données plugin
      * 
      * Usage:
-     *   $context->_metadata('logged')   → Get from plugin
+     *   $context->metadata('logged')   → Get from plugin
      * 
-     *   $context->_metadata('test.logged')   → Get from core
+     *   $context->metadata('test.logged')   → Get from core
      * 
-     *   $context->_metadata('logged', true) → Set from plugin
+     *   $context->metadata('logged', true) → Set from plugin
      */
-    public function _metadata(string $key, mixed $value = null): mixed
+    public function metadata(string $key, mixed $value = null): mixed
     {
         if (func_num_args() === 2) {
             return $this->setMetadata($key, $value);

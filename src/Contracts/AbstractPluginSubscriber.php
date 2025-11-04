@@ -13,8 +13,7 @@ abstract class AbstractPluginSubscriber implements PluginSubscriberContract
     abstract public static function getPluginName(): string;
 
     /**
-     * Mapping d’événements : 'event-name' => [Service::class => ['method1', 'method2']]
-     * ou 'event-name' => [Service::class => 'method']
+     * Mapping d’événements 
      */
     protected array $events = [];
 

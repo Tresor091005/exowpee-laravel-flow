@@ -11,7 +11,9 @@ class FlowServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(FlowManager::class);
+        $this->app->scoped(FlowManager::class, function ($app) {
+            return new FlowManager();
+        });
         $this->app->alias(FlowManager::class, 'flow');
     }
 
