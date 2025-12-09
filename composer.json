@@ -15,8 +15,7 @@
         "illuminate/events": "^12.0"
     },
     "require-dev": {
-        "orchestra/testbench": "^9.5",
-        "pestphp/pest": "^3.5"
+        "orchestra/testbench": "^10.8"
     },
     "autoload": {
         "psr-4": {

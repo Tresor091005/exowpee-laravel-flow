@@ -6,14 +6,11 @@ use Exowpee\LaravelFlow\Exceptions\IsolationException;
 
 final class Context
 {
-    private array $coreData = [];
-    private array $pluginData = [];
-    private ?string $currentPlugin = null;
+    private array $moduleData = [];
 
-    public function __construct(array $initial = [])
-    {
-        $this->coreData = $initial;
-    }
+    private array $moduleStack = [];
+
+    public function __construct(private array $coreData = []) {}
 
     // ═══════════════════════════════════════════════════════════
     // Magic Methods : Accès aux données CORE uniquement
@@ -26,10 +23,10 @@ final class Context
 
     public function __set(string $key, mixed $value): void
     {
-        if ($this->currentPlugin !== null) {
+        if ($this->currentModule() !== null) {
             throw new IsolationException(
-                "Plugin '{$this->currentPlugin}' cannot modify core data '{$key}'. " .
-                "Use _metadata('{$key}', \$value) instead."
+                "Module '{$this->currentModule()}' cannot modify core data '{$key}'. ".
+                "Use metadata('{$key}', \$value) instead."
             );
         }
 
@@ -43,9 +40,9 @@ final class Context
 
     public function __unset(string $key): void
     {
-        if ($this->currentPlugin !== null) {
+        if ($this->currentModule() !== null) {
             throw new IsolationException(
-                "Plugin '{$this->currentPlugin}' cannot unset core data."
+                "Module '{$this->currentModule()}' cannot unset core data."
             );
         }
 
@@ -53,19 +50,9 @@ final class Context
     }
 
     // ═══════════════════════════════════════════════════════════
-    // Metadata : Zone isolée pour plugins avec auto-prefix
+    // Metadata : Zone isolée pour modules avec auto-prefix
     // ═══════════════════════════════════════════════════════════
 
-    /**
-     * Accès aux données plugin
-     * 
-     * Usage:
-     *   $context->metadata('logged')   → Get from plugin
-     * 
-     *   $context->metadata('test.logged')   → Get from core
-     * 
-     *   $context->metadata('logged', true) → Set from plugin
-     */
     public function metadata(string $key, mixed $value = null): mixed
     {
         if (func_num_args() === 2) {
@@ -75,106 +62,112 @@ final class Context
         return $this->getMetadata($key);
     }
 
-    /**
-     * Set metadata avec isolation stricte
-     */
     private function setMetadata(string $key, mixed $value): self
     {
-        // Core ne peut pas écrire dans pluginData
-        if ($this->currentPlugin === null) {
+        $currentModule = $this->currentModule();
+
+        if ($currentModule === null) {
             throw new IsolationException(
-                "Core context cannot write to plugin metadata. " .
-                "Use \$context->property = \$value for core data."
+                'Core context cannot write to module metadata. '.
+                'Use $context->property = $value for core data.'
             );
         }
 
-        // Interdire les points dans les clés pour garantir l'isolation
         if (str_contains($key, '.')) {
             throw new IsolationException(
-                "Plugin '{$this->currentPlugin}' cannot use '.' in metadata keys. " .
-                "Use simple keys like 'logged' (auto-prefixed to '{$this->currentPlugin}.logged')."
+                "Module '{$currentModule}' cannot use '.' in metadata keys. ".
+                "Use simple keys like 'logged' (auto-prefixed to '{$currentModule}.logged')."
             );
         }
 
-        // Auto-prefix et stockage
-        $prefixedKey = "{$this->currentPlugin}.{$key}";
-        $this->pluginData[$prefixedKey] = $value;
+        $prefixedKey = "{$currentModule}.{$key}";
+        $this->moduleData[$prefixedKey] = $value;
 
         return $this;
     }
 
-    /**
-     * Get metadata avec auto-prefix intelligent
-     */
     private function getMetadata(string $key): mixed
     {
-        if ($this->currentPlugin === null) {
+        $currentModule = $this->currentModule();
+
+        if ($currentModule === null) {
             throw_unless(str_contains($key, '.'), "Invalid key: '.' is missing");
-            return $this->pluginData[$key] ?? null;
+
+            return $this->moduleData[$key] ?? null;
         }
 
         if (str_contains($key, '.')) {
             throw new IsolationException(
-                "Cannot use '.' in metadata keys. " .
-                "Plugin '{$this->currentPlugin}': use simple keys like 'logged' (auto-prefixed to '{$this->currentPlugin}.logged')."
+                "Cannot use '.' in metadata keys. ".
+                "Module '{$currentModule}': use simple keys like 'logged' (auto-prefixed to '{$currentModule}.logged')."
             );
         }
 
-        $prefixedKey = "{$this->currentPlugin}.{$key}";
-        return $this->pluginData[$prefixedKey] ?? null;
+        $prefixedKey = "{$currentModule}.{$key}";
+
+        return $this->moduleData[$prefixedKey] ?? null;
     }
 
     // ═══════════════════════════════════════════════════════════
-    // Internal : Mode Switching (usage par FlowManager uniquement)
+    // Internal : Mode Switching avec pile (usage par FlowManager)
     // ═══════════════════════════════════════════════════════════
 
     /**
      * @internal
      */
-    public function _enterPluginContext(string $pluginName): void
+    public function _enterModuleContext(string $moduleName): void
     {
-        $this->currentPlugin = $pluginName;
+        $this->moduleStack[] = $moduleName;
     }
 
     /**
      * @internal
      */
-    public function _exitPluginContext(): void
+    public function _exitModuleContext(): void
     {
-        $this->currentPlugin = null;
+        if ($this->moduleStack === []) {
+            throw new IsolationException(
+                'Cannot exit module context: stack is empty.'
+            );
+        }
+
+        array_pop($this->moduleStack);
+    }
+
+    /**
+     * Retourne le module actuellement actif (sommet de la pile)
+     */
+    private function currentModule(): ?string
+    {
+        return $this->moduleStack === []
+            ? null
+            : end($this->moduleStack);
     }
 
     // ═══════════════════════════════════════════════════════════
     // Utilitaires
     // ═══════════════════════════════════════════════════════════
 
-    /**
-     * Retourne toutes les données (core + plugins groupés)
-     */
     public function all(): array
     {
-        $groupedPlugins = [];
-        foreach ($this->pluginData as $key => $value) {
-            if (str_contains($key, '.')) {
-                [$plugin, $field] = explode('.', $key, 2);
-                $groupedPlugins[$plugin][$field] = $value;
+        $groupedModules = [];
+        foreach ($this->moduleData as $key => $value) {
+            if (str_contains((string) $key, '.')) {
+                [$module, $field] = explode('.', (string) $key, 2);
+                $groupedModules[$module][$field] = $value;
             } else {
-                // Clé sans namespace (ne devrait pas arriver)
-                $groupedPlugins['_ungrouped'][$key] = $value;
+                $groupedModules['_ungrouped'][$key] = $value;
             }
         }
 
         return [
-            'core' => $this->coreData,
-            'plugins' => $this->currentPlugin
-                ? ($groupedPlugins[$this->currentPlugin] ?? [])
-                : $groupedPlugins
+            'core'    => $this->coreData,
+            'modules' => $this->currentModule()
+                ? ($groupedModules[$this->currentModule()] ?? [])
+                : $groupedModules,
         ];
     }
 
-    /**
-     * Retourne uniquement les données core
-     */
     public function core(): array
     {
         return $this->coreData;

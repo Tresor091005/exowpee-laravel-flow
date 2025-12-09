@@ -7,30 +7,29 @@ use Exowpee\LaravelFlow\Exceptions\FlowException;
 class FlowManager
 {
     private const ATTRIBUTE_KEY = '__flow_context';
-    
+
     /**
      * Démarre un nouveau flow avec un Context initial
-     * 
+     *
      * Stocke le Context dans request()->attributes pour qu'il soit
      * accessible partout pendant le cycle de vie de la requête
      */
     public function start(array $data = []): Context
     {
         $context = $this->current();
-        
-        if ($context) {
+
+        if ($context instanceof Context) {
             throw new FlowException(
-                "Cannot start a new context: there is already an active context. " .
-                "Call flow()->stop() first."
+                'Cannot start a new context: there is already an active context.'
             );
         }
 
         $context = new Context($data);
         request()->attributes->set(self::ATTRIBUTE_KEY, $context);
-        
+
         return $context;
     }
-    
+
     /**
      * Récupère le Context courant depuis la requête
      */
@@ -38,46 +37,44 @@ class FlowManager
     {
         return request()->attributes->get(self::ATTRIBUTE_KEY);
     }
-    
+
     /**
      * Émet un event Laravel classique avec le Context courant
-     * 
+     *
      * Les listeners reçoivent directement l'objet Context
      */
-    public function emit(string $eventName): Context
+    public function hook(string $eventName): void
     {
         $context = $this->current();
-        
-        if (!$context) {
+
+        if (!$context instanceof Context) {
             throw new FlowException(
-                "No active context. Call flow()->start() first."
+                'No active context. Ensure InitializeFlowContext middleware is registered.'
             );
         }
-        
+
         // Dispatch l'event avec le context
         event($eventName, $context);
-        
-        return $context;
     }
-    
+
     /**
      * Termine le flow et nettoie le Context
-     * 
+     *
      * @return Context Le context final pour inspection
      */
     public function stop(): Context
     {
         $context = $this->current();
-        
-        if (!$context) {
+
+        if (!$context instanceof Context) {
             throw new FlowException(
-                "No active context to stop. Call flow()->start() first."
+                'No active context to stop.'
             );
         }
-        
+
         // Cleanup
         request()->attributes->remove(self::ATTRIBUTE_KEY);
-        
+
         return $context;
     }
 }

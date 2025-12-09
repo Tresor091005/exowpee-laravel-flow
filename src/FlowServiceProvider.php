@@ -11,9 +11,7 @@ class FlowServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->scoped(FlowManager::class, function ($app) {
-            return new FlowManager();
-        });
+        $this->app->scoped(FlowManager::class);
         $this->app->alias(FlowManager::class, 'flow');
     }
 
@@ -22,6 +20,6 @@ class FlowServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-
+        //
     }
 }
