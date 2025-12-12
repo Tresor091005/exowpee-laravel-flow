@@ -148,7 +148,12 @@ final class Context
     // Utilitaires
     // ═══════════════════════════════════════════════════════════
 
-    public function all(): array
+    public function core(): array
+    {
+        return $this->coreData;
+    }
+
+    public function modules(): array
     {
         $groupedModules = [];
         foreach ($this->moduleData as $key => $value) {
@@ -160,21 +165,30 @@ final class Context
             }
         }
 
-        return [
-            'core'    => $this->coreData,
-            'modules' => $this->currentModule()
+        return $this->currentModule()
                 ? ($groupedModules[$this->currentModule()] ?? [])
-                : $groupedModules,
+                : $groupedModules;
+    }
+
+    public function all(): array
+    {
+        return [
+            'core'    => $this->core(),
+            'modules' => $this->modules(),
         ];
     }
 
-    public function core(): array
+    public function getFromModules(string $key): array
     {
-        return $this->coreData;
+        $datas = [];
+        $modules = $this->modules();
+        foreach ($modules as $module) {
+            if (isset($module[$key]) && is_array($module[$key])) {
+                $datas = array_merge($datas, $module[$key]);
+            }
+        }
+
+        return $datas;
     }
 
-    public function modules(): array
-    {
-        return $this->all()['modules'] ?? [];
-    }
 }
