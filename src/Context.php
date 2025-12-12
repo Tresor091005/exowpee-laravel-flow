@@ -172,4 +172,9 @@ final class Context
     {
         return $this->coreData;
     }
+
+    public function modules(): array
+    {
+        return $this->all()['modules'] ?? [];
+    }
 }
